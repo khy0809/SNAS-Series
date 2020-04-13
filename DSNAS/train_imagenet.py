@@ -22,7 +22,8 @@ import os.path as osp
 sys.path.append(osp.abspath(osp.join(__file__, '../../')))
 
 from devkit.core import (init_dist, broadcast_params, average_gradients, load_state_ckpt, load_state, save_checkpoint, LRScheduler, CrossEntropyLoss)
-from devkit.dataset.imagenet_dataset import ImagenetDataset
+#from devkit.dataset.imagenet_dataset import ImagenetDataset
+import datasets
 from network import ShuffleNetV2_OneShot
 
 parser = argparse.ArgumentParser(
@@ -72,10 +73,13 @@ def main():
 
     print('Enabled distributed training.')
 
-    rank, world_size = init_dist(
-        backend='nccl', port=args.port)
-    args.rank = rank
-    args.world_size = world_size
+    # rank, world_size = init_dist(
+    #     backend='nccl', port=args.port)
+    # args.rank = rank
+    # args.world_size = world_size
+
+    args.rank = 0
+    args.world_size = 8
 
     np.random.seed(args.seed*args.rank)
     torch.manual_seed(args.seed*args.rank)
@@ -90,7 +94,7 @@ def main():
         channels_scales = 20*[1.0]
         model = ShuffleNetV2_OneShot(args=args, architecture=architecture, channels_scales=channels_scales)
         model.cuda()
-        broadcast_params(model)
+        #broadcast_params(model)
         for v in model.parameters():
             if v.requires_grad:
                 if v.grad is None:
@@ -185,49 +189,54 @@ def main():
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    train_dataset = ImagenetDataset(
-        args.train_root,
-        args.train_source,
-        transforms.Compose([
+    transform = transforms.Compose([
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
-        ]))
-    train_dataset_wo_ms = ImagenetDataset(
-        args.train_root,
-        args.train_source,
-        transforms.Compose([
+            normalize])
+    train_dataset = datasets.ImageNet(split='train', transform=transform)
+
+    transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
-        ]))
-    val_dataset = ImagenetDataset(
-        args.val_root,
-        args.val_source,
-        transforms.Compose([
+            normalize])
+    train_dataset_wo_ms = datasets.ImageNet(split='train', transform=transform)
+
+    transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            normalize,
-        ]))
+            normalize])
+    val_dataset = datasets.ImageNet(split='val', transform=transform)
 
-    train_sampler = DistributedSampler(train_dataset)
-    val_sampler = DistributedSampler(val_dataset)
+    # train_sampler = DistributedSampler(train_dataset)
+    # val_sampler = DistributedSampler(val_dataset)
+    #
+    # train_loader = DataLoader(
+    #     train_dataset, batch_size=args.batch_size//args.world_size, shuffle=False,
+    #     num_workers=args.workers, pin_memory=False, sampler=train_sampler)
+    #
+    # train_loader_wo_ms = DataLoader(
+    #     train_dataset_wo_ms, batch_size=args.batch_size//args.world_size, shuffle=False,
+    #     num_workers=args.workers, pin_memory=False, sampler=train_sampler)
+    #
+    # val_loader = DataLoader(
+    #     val_dataset, batch_size=50, shuffle=False,
+    #     num_workers=args.workers, pin_memory=False, sampler=val_sampler)
 
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size//args.world_size, shuffle=False,
-        num_workers=args.workers, pin_memory=False, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=False)
 
     train_loader_wo_ms = DataLoader(
         train_dataset_wo_ms, batch_size=args.batch_size//args.world_size, shuffle=False,
-        num_workers=args.workers, pin_memory=False, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=False)
 
     val_loader = DataLoader(
         val_dataset, batch_size=50, shuffle=False,
-        num_workers=args.workers, pin_memory=False, sampler=val_sampler)
+        num_workers=args.workers, pin_memory=False)
 
     if args.evaluate:
         validate(val_loader, model, criterion, 0, writer, logging)
@@ -238,7 +247,7 @@ def main():
     lr_scheduler = LRScheduler(optimizer, niters, args)
 
     for epoch in range(start_epoch, args.epochs):
-        train_sampler.set_epoch(epoch)
+        #train_sampler.set_epoch(epoch)
         
         if args.early_fix_arch:
             if len(model.fix_arch_index.keys()) > 0:
@@ -270,7 +279,7 @@ def main():
             prec1 = validate(val_loader, model, criterion, epoch, writer, logging)        
             args.gen_max_child_flag = False
 
-        if rank == 0:
+        if args.rank == 0:
             # remember best prec@1 and save checkpoint
             is_best = prec1 > best_prec1
             best_prec1 = max(prec1, best_prec1)
@@ -299,7 +308,7 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
         # measure data loading time
         data_time.update(time.time() - end)
         lr_scheduler.update(i, epoch)
-        target = target.cuda(async=True)
+        target = target.cuda(non_blocking=True)
         input_var = torch.autograd.Variable(input.cuda())
         target_var = torch.autograd.Variable(target)
 
@@ -317,9 +326,9 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
         reduced_prec1 = prec1.clone() / world_size
         reduced_prec5 = prec5.clone() / world_size
 
-        dist.all_reduce_multigpu([reduced_loss])
-        dist.all_reduce_multigpu([reduced_prec1])
-        dist.all_reduce_multigpu([reduced_prec5])
+        #dist.all_reduce_multigpu([reduced_loss])
+        #dist.all_reduce_multigpu([reduced_prec1])
+        #dist.all_reduce_multigpu([reduced_prec5])
 
         losses.update(reduced_loss.item(), input.size(0))
         top1.update(reduced_prec1.item(), input.size(0))
@@ -328,8 +337,7 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
         # compute gradient and do SGD step
         if args.random_sample:
             loss.backward()        
-        # loss.backward()
-        average_gradients(model)
+        #average_gradients(model)
         optimizer.step()
         optimizer.zero_grad()
 
@@ -378,7 +386,7 @@ def validate(val_loader, model, criterion, epoch, writer, logging):
     with torch.no_grad():
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
-            target = target.cuda(async=True)
+            target = target.cuda(non_blocking=True)
             input_var = torch.autograd.Variable(input.cuda())
             target_var = torch.autograd.Variable(target)
 
@@ -394,9 +402,9 @@ def validate(val_loader, model, criterion, epoch, writer, logging):
             reduced_prec1 = prec1.clone() / world_size
             reduced_prec5 = prec5.clone() / world_size
 
-            dist.all_reduce_multigpu([reduced_loss])
-            dist.all_reduce_multigpu([reduced_prec1])
-            dist.all_reduce_multigpu([reduced_prec5])
+            #dist.all_reduce_multigpu([reduced_loss])
+            #dist.all_reduce_multigpu([reduced_prec1])
+            #dist.all_reduce_multigpu([reduced_prec5])
 
             losses.update(reduced_loss.item(), input.size(0))
             top1.update(prec1.item(), input.size(0))

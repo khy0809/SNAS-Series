@@ -21,7 +21,7 @@ TRAIN:
 
     print_freq: 100
     model_dir: ckpts_1_5_x
-    checkpoint_path: 2019-10-29/search-EXP-20191029-135429-imagenet_epo_240_layer_20_batch_1024_lr_0.5_seed_24_early_fix_arch_flops_loss_1e-06_search_add_bnaffine_bneps_1e-2_arch_lr_1e-3/model.pth-80
+    checkpoint_path: 2020-04-09/search-EXP-20200409-151202-imagenet_epo_240_layer_20_batch_1024_lr_0.5_seed_24_early_fix_arch_flops_loss_1e-06_search_arch_lr_1e-3_decay_0/model.pth-80
 
     train_root: /mnt/lustre/share/images/train
     train_source: /mnt/lustre/share/images/meta/train.txt

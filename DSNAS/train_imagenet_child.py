@@ -22,7 +22,8 @@ import os.path as osp
 sys.path.append(osp.abspath(osp.join(__file__, '../../')))
 
 from devkit.core import (init_dist, broadcast_params, average_gradients, load_state_ckpt, load_state, save_checkpoint, LRScheduler, CrossEntropyLoss)
-from devkit.dataset.imagenet_dataset import ImagenetDataset
+#from devkit.dataset.imagenet_dataset import ImagenetDataset
+import datasets
 from network_child import ShuffleNetV2_OneShot
 
 parser = argparse.ArgumentParser(
@@ -144,7 +145,7 @@ def main():
 
     # auto resume from a checkpoint
     remark = 'imagenet_'
-    remark += 'epo_' + str(args.epochs) + '_layer_' + str(args.layers) + '_batch_' + str(args.batch_size) + '_lr_' + str(float("{0:.2f}".format(args.base_    lr))) + '_seed_' + str(args.seed)
+    remark += 'epo_' + str(args.epochs) + '_layer_' + str(args.layers) + '_batch_' + str(args.batch_size) + '_lr_' + str(float("{0:.2f}".format(args.base_lr))) + '_seed_' + str(args.seed)
 
     if args.remark != 'none':
         remark += '_'+args.remark
@@ -181,34 +182,27 @@ def main():
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    train_dataset = ImagenetDataset(
-        args.train_root,
-        args.train_source,
-        transforms.Compose([
+    transform = transforms.Compose([
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
-        ]))
-    train_dataset_wo_ms = ImagenetDataset(
-        args.train_root,
-        args.train_source,
-        transforms.Compose([
+            normalize])
+    train_dataset = datasets.ImageNet(split='train', transform=transform)
+
+    transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
-        ]))
-    val_dataset = ImagenetDataset(
-        args.val_root,
-        args.val_source,
-        transforms.Compose([
+            normalize])
+    train_dataset_wo_ms = datasets.ImageNet(split='train', transform=transform)
+
+    transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            normalize,
-        ]))
+            normalize])
+    val_dataset = datasets.ImageNet(split='val', transform=transform)
 
     train_sampler = DistributedSampler(train_dataset)
     val_sampler = DistributedSampler(val_dataset)
@@ -282,7 +276,7 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
         # measure data loading time
         data_time.update(time.time() - end)
         lr_scheduler.update(i, epoch)
-        target = target.cuda(async=True)
+        target = target.cuda(non_blocking=True)
         input_var = torch.autograd.Variable(input.cuda())
         target_var = torch.autograd.Variable(target)
 
@@ -347,7 +341,7 @@ def validate(val_loader, model, criterion, epoch, writer, logging):
     with torch.no_grad():
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
-            target = target.cuda(async=True)
+            target = target.cuda(non_blocking=True)
             input_var = torch.autograd.Variable(input.cuda())
             target_var = torch.autograd.Variable(target)
 
