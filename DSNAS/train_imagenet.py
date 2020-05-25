@@ -59,6 +59,8 @@ parser.add_argument('--gen_max_child', action='store_true', default=False, help=
 parser.add_argument('--gen_max_child_flag', action='store_true', default=False, help='flag of generating child network by argmax(alpha)')
 parser.add_argument('--remark', type=str, default='none', help='experiment details')
 
+parser.add_argument('--reduce_model_size', action='store_true', default=False, help='if set, the network size is reduced to 1/4')
+
 args = parser.parse_args()
 
 def main():
@@ -88,8 +90,13 @@ def main():
     # create model
     print("=> creating model '{}'".format(args.model))
     if args.SinglePath:
-        architecture = 20*[0]
-        channels_scales = 20*[1.0]
+        if not args.reduce_model_size:
+            architecture = 20*[0]
+            channels_scales = 20*[1.0]
+        else:
+            architecture = 5*[0]
+            channels_scales = 5*[1.0]
+
         model = ShuffleNetV2_OneShot(args=args, architecture=architecture, channels_scales=channels_scales)
         model.cuda()
         broadcast_params(model)
@@ -443,43 +450,45 @@ def add_tensorboard_data(epoch, step, model, writer, train_queue):
         writer.add_scalar("block_reward_2", model.block_reward[2], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_reward_3", model.block_reward[3], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_reward_4", model.block_reward[4], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_5", model.block_reward[5], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_6", model.block_reward[6], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_7", model.block_reward[7], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_8", model.block_reward[8], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_9", model.block_reward[9], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_10", model.block_reward[10], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_11", model.block_reward[11], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_12", model.block_reward[12], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_13", model.block_reward[13], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_14", model.block_reward[14], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_15", model.block_reward[15], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_16", model.block_reward[16], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_17", model.block_reward[17], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_18", model.block_reward[18], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_reward_19", model.block_reward[19], step + len(train_queue.dataset) * epoch)
- 
+        if not args.reduce_model_size:
+            writer.add_scalar("block_reward_5", model.block_reward[5], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_6", model.block_reward[6], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_7", model.block_reward[7], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_8", model.block_reward[8], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_9", model.block_reward[9], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_10", model.block_reward[10], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_11", model.block_reward[11], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_12", model.block_reward[12], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_13", model.block_reward[13], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_14", model.block_reward[14], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_15", model.block_reward[15], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_16", model.block_reward[16], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_17", model.block_reward[17], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_18", model.block_reward[18], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_reward_19", model.block_reward[19], step + len(train_queue.dataset) * epoch)
+
         #entropy_normal_edge
         writer.add_scalar("block_entropy_0", block_entropy[0], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_entropy_1", block_entropy[1], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_entropy_2", block_entropy[2], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_entropy_3", block_entropy[3], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_entropy_4", block_entropy[4], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_5", block_entropy[5], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_6", block_entropy[6], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_7", block_entropy[7], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_8", block_entropy[8], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_9", block_entropy[9], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_10", block_entropy[10], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_11", block_entropy[11], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_12", block_entropy[12], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_13", block_entropy[13], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_14", block_entropy[14], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_15", block_entropy[15], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_16", block_entropy[16], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_17", block_entropy[17], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_18", block_entropy[18], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_entropy_19", block_entropy[19], step + len(train_queue.dataset) * epoch)
+        if not args.reduce_model_size:
+            writer.add_scalar("block_entropy_5", block_entropy[5], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_6", block_entropy[6], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_7", block_entropy[7], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_8", block_entropy[8], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_9", block_entropy[9], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_10", block_entropy[10], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_11", block_entropy[11], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_12", block_entropy[12], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_13", block_entropy[13], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_14", block_entropy[14], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_15", block_entropy[15], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_16", block_entropy[16], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_17", block_entropy[17], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_18", block_entropy[18], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_entropy_19", block_entropy[19], step + len(train_queue.dataset) * epoch)
       
         #KL_normal_edge
         writer.add_scalar("block_KL_0", model.block_KL[0], step + len(train_queue.dataset) * epoch)
@@ -487,21 +496,22 @@ def add_tensorboard_data(epoch, step, model, writer, train_queue):
         writer.add_scalar("block_KL_2", model.block_KL[2], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_KL_3", model.block_KL[3], step + len(train_queue.dataset) * epoch)
         writer.add_scalar("block_KL_4", model.block_KL[4], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_5", model.block_KL[5], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_6", model.block_KL[6], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_7", model.block_KL[7], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_8", model.block_KL[8], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_9", model.block_KL[9], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_10", model.block_KL[10], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_11", model.block_KL[11], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_12", model.block_KL[12], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_13", model.block_KL[13], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_14", model.block_KL[14], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_15", model.block_KL[15], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_16", model.block_KL[16], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_17", model.block_KL[17], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_18", model.block_KL[18], step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("block_KL_19", model.block_KL[19], step + len(train_queue.dataset) * epoch)
+        if not args.reduce_model_size:
+            writer.add_scalar("block_KL_5", model.block_KL[5], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_6", model.block_KL[6], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_7", model.block_KL[7], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_8", model.block_KL[8], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_9", model.block_KL[9], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_10", model.block_KL[10], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_11", model.block_KL[11], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_12", model.block_KL[12], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_13", model.block_KL[13], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_14", model.block_KL[14], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_15", model.block_KL[15], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_16", model.block_KL[16], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_17", model.block_KL[17], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_18", model.block_KL[18], step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("block_KL_19", model.block_KL[19], step + len(train_queue.dataset) * epoch)
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
