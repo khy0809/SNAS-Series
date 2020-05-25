@@ -19,6 +19,8 @@ import yaml
 import sys
 from tensorboardX import SummaryWriter
 import os.path as osp
+import theconf
+
 sys.path.append(osp.abspath(osp.join(__file__, '../../')))
 
 from devkit.core import (init_dist, broadcast_params, average_gradients, load_state_ckpt, load_state, save_checkpoint, LRScheduler, CrossEntropyLoss)
@@ -60,12 +62,38 @@ parser.add_argument('--gen_max_child_flag', action='store_true', default=False, 
 parser.add_argument('--remark', type=str, default='none', help='experiment details')
 
 parser.add_argument('--reduce_model_size', action='store_true', default=False, help='if set, the network size is reduced to 1/4')
+parser.add_argument('--start_stage2_epoch', type=int, default=None, help='epoch starting stage 2 (update both alpha and model params)')
+parser.add_argument('--freeze_model', action='store_true', help='if set, freeze model params at stage 2')
+
+parser.add_argument('--print_freq', type=int, default=100, help='print frequency')
+parser.add_argument('--arch_learning_rate', type=float, default=0.001, help='alpha learning rate')
+parser.add_argument('--skip_valid', type=int, default=10)
 
 args = parser.parse_args()
+
+
+def alphas2table(alphas):
+    num_blocks = len(alphas)
+    num_alphas = len(alphas[0])
+
+    names_row = [ f'block_{i:02d}' for i in range(num_blocks) ]
+    names_col = [ str(i) for i in range(num_alphas) ]
+
+    table = '| ' +  ' | '.join([ "", *names_col ]) + ' |' + '  \n'
+    table += '|' + '---|' * (len(names_col) + 1) + '  \n'
+    for name_row, alpha in zip(names_row, alphas):
+        alpha = [ f'{a:.2f}' for a in alpha ]
+        table += '| ' + ' | '.join([ name_row, *alpha ]) + ' |' +  '  \n'
+    return table
+
+
 
 def main():
     global args, best_prec1
     args = parser.parse_args()
+
+    if args.start_stage2_epoch is None:
+        args.start_stage2_epoch = args.epochs
 
     with open(args.config) as f:
         config = yaml.load(f)
@@ -150,20 +178,23 @@ def main():
         )
 
     # auto resume from a checkpoint
-    remark = 'imagenet_'
-    remark += 'epo_' + str(args.epochs) + '_layer_' + str(args.layers) + '_batch_' + str(args.batch_size) + '_lr_' + str(args.base_lr)  + '_seed_' + str(args.seed) + '_pretrain_' + str(args.pretrain_epoch)
+    #remark = 'imagenet_'
+    #remark += 'epo_' + str(args.epochs) + '_layer_' + str(args.layers) + '_batch_' + str(args.batch_size) + '_lr_' + str(args.base_lr)  + '_seed_' + str(args.seed) + '_pretrain_' + str(args.pretrain_epoch)
 
-    if args.early_fix_arch:
-        remark += '_early_fix_arch'  
+    # if args.early_fix_arch:
+    #     remark += '_early_fix_arch'
+    #
+    # if args.flops_loss:
+    #     remark += '_flops_loss_' + str(args.flops_loss_coef)
+    #
+    # if args.remark != 'none':
+    #     remark += '_'+args.remark
 
-    if args.flops_loss:
-        remark += '_flops_loss_' + str(args.flops_loss_coef)
-
-    if args.remark != 'none':
-        remark += '_'+args.remark
+    remark = args.remark
 
     args.save = 'search-{}-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"), remark)
-    args.save_log = 'nas-{}-{}'.format(time.strftime("%Y%m%d-%H%M%S"), remark)
+    #args.save_log = 'nas-{}-{}'.format(time.strftime("%Y%m%d-%H%M%S"), remark)
+    args.save_log = remark
     generate_date = str(datetime.now().date())
 
     path = os.path.join(generate_date, args.save)
@@ -176,7 +207,7 @@ def main():
         fh.setFormatter(logging.Formatter(log_format))
         logging.getLogger().addHandler(fh)
         logging.info("args = %s", args)
-        writer = SummaryWriter('./runs/' + generate_date + '/' + args.save_log)
+        writer = SummaryWriter('./runs_new/' + args.save_log)
     else:
         writer = None
 
@@ -240,6 +271,15 @@ def main():
     lr_scheduler = LRScheduler(optimizer, niters, args)
 
     for epoch in range(start_epoch, args.epochs):
+
+        if epoch >= args.start_stage2_epoch and args.random_sample:
+            model.args.random_sample = False
+            if args.freeze_model:
+                for params in network_params:
+                    params.requires_grad = False
+                for params in wo_wd_params:
+                    params.requires_grad = False
+
         train_sampler.set_epoch(epoch)
         
         if args.early_fix_arch:
@@ -261,6 +301,18 @@ def main():
             if args.rank == 0:
                 writer.add_scalar('num_fixed_arch', num_fixed_arch, epoch)
 
+        # print alpha matrix
+        alpha_dict = {}
+        #print(model.log_alpha.size())
+        for i in range(model.log_alpha.size(0)):
+            alpha_dict[i] = torch.softmax(model.log_alpha[i].unsqueeze(0).cpu().data, dim=1)
+
+        if args.rank == 0:
+            if len(alpha_dict) > 0:
+                alphas = [ alpha.flatten().tolist() for i, alpha in alpha_dict.items() ]
+                writer.add_text('alpha', alphas2table(alphas), epoch)
+
+
         if args.rank == 0 and args.SinglePath:
             logging.info('epoch %d', epoch)
             logging.info(model.log_alpha)         
@@ -274,24 +326,26 @@ def main():
             train(train_loader, model, criterion, optimizer, arch_optimizer, lr_scheduler, epoch, writer, logging)
 
 
-        # evaluate on validation set
-        prec1 = validate(val_loader, model, criterion, epoch, writer, logging)
-        if args.gen_max_child:
-            args.gen_max_child_flag = True
-            prec1 = validate(val_loader, model, criterion, epoch, writer, logging)        
-            args.gen_max_child_flag = False
 
-        if rank == 0:
-            # remember best prec@1 and save checkpoint
-            is_best = prec1 > best_prec1
-            best_prec1 = max(prec1, best_prec1)
-            save_checkpoint(model_dir, {
-                'epoch': epoch + 1,
-                'model': args.model,
-                'state_dict': model.state_dict(),
-                'best_prec1': best_prec1,
-                'optimizer': optimizer.state_dict(),
-            }, is_best)
+        # evaluate on validation set
+        if (epoch % args.skip_valid) == 0:
+            prec1 = validate(val_loader, model, criterion, epoch, writer, logging)
+            if args.gen_max_child:
+                args.gen_max_child_flag = True
+                prec1 = validate(val_loader, model, criterion, epoch, writer, logging)
+                args.gen_max_child_flag = False
+
+            if rank == 0:
+                # remember best prec@1 and save checkpoint
+                is_best = prec1 > best_prec1
+                best_prec1 = max(prec1, best_prec1)
+                save_checkpoint(model_dir, {
+                    'epoch': epoch + 1,
+                    'model': args.model,
+                    'state_dict': model.state_dict(),
+                    'best_prec1': best_prec1,
+                    'optimizer': optimizer.state_dict(),
+                }, is_best)
 
 def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_scheduler, epoch, writer, logging):
     batch_time = AverageMeter()
@@ -307,6 +361,7 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
 
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
+
         # measure data loading time
         data_time.update(time.time() - end)
         lr_scheduler.update(i, epoch)
@@ -344,6 +399,12 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
         optimizer.step()
         optimizer.zero_grad()
 
+        # if args.rank == 0 and args.SinglePath:
+        #     logging.info('epoch %d', epoch)
+        #     logging.info(model.log_alpha)
+        #     logging.info(F.softmax(model.log_alpha, dim=-1))
+        #     logging.info('flops %fM', model.cal_flops())
+
         if args.SinglePath:
             if not args.random_sample and epoch >= args.pretrain_epoch:
                  arch_optimizer.step()
@@ -358,19 +419,25 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
         end = time.time()
 
         if i % args.print_freq == 0 and rank == 0:
+            block_entropy = model._arch_entropy(model.log_alpha)
+            total_entropy = block_entropy.sum()
+
             print('Epoch: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t'
+                  'alpha_entropy {total_entropy:.4f}'.format(
                 epoch, i, len(train_loader), batch_time=batch_time,
-                data_time=data_time, loss=losses, top1=top1, top5=top5))
+                data_time=data_time, loss=losses, top1=top1, top5=top5, total_entropy=total_entropy))
             niter = epoch * len(train_loader) + i
             writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], niter)
             writer.add_scalar('Train/Avg_Loss', losses.avg, niter)
             writer.add_scalar('Train/Avg_Top1', top1.avg / 100.0, niter)
             writer.add_scalar('Train/Avg_Top5', top5.avg / 100.0, niter)
+            writer.add_scalar('Train/Flops', model.cal_flops(), niter)
+
             logging.info('train %03d %e %f %f', i, losses.avg, top1.avg, top5.avg)
     if rank == 0:
         logging.info('train %03d %e %f %f', i, losses.avg, top1.avg, top5.avg)
