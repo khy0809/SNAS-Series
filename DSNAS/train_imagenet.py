@@ -243,15 +243,24 @@ def main():
         train_sampler.set_epoch(epoch)
         
         if args.early_fix_arch:
+            num_fixed_arch = 0
+            num_total_arch = 0
             if len(model.fix_arch_index.keys()) > 0:
                 for key, value_lst in model.fix_arch_index.items():
                     model.log_alpha.data[key, :] = value_lst[1]
             sort_log_alpha = torch.topk(F.softmax(model.log_alpha.data, dim=-1), 2)
             argmax_index = (sort_log_alpha[0][:,0] - sort_log_alpha[0][:,1] >= 0.3)
+            num_total_arch += argmax_index.size(0)
+            num_fixed_arch += (argmax_index == True).sum()
+
             for id in range(argmax_index.size(0)):
                 if argmax_index[id] == 1 and id not in model.fix_arch_index.keys():
                     model.fix_arch_index[id] = [sort_log_alpha[1][id,0].item(), model.log_alpha.detach().clone()[id, :]]
-            
+            print(f'[{epoch}/{args.epochs}] fixed {num_fixed_arch}/{num_total_arch}')
+
+            if args.rank == 0:
+                writer.add_scalar('num_fixed_arch', num_fixed_arch, epoch)
+
         if args.rank == 0 and args.SinglePath:
             logging.info('epoch %d', epoch)
             logging.info(model.log_alpha)         
