@@ -274,6 +274,7 @@ def main():
 
         if epoch >= args.start_stage2_epoch and args.random_sample:
             model.args.random_sample = False
+            args.random_sample = False
             if args.freeze_model:
                 for params in network_params:
                     params.requires_grad = False
@@ -396,7 +397,8 @@ def train(train_loader, model, criterion, optimizer, arch_optimizer, lr_schedule
             loss.backward()        
         # loss.backward()
         average_gradients(model)
-        optimizer.step()
+        if args.random_sample:
+            optimizer.step()
         optimizer.zero_grad()
 
         # if args.rank == 0 and args.SinglePath:
@@ -590,27 +592,27 @@ def add_tensorboard_data(epoch, step, model, writer, train_queue):
             writer.add_scalar("block_KL_19", model.block_KL[19], step + len(train_queue.dataset) * epoch)
 
         # log_alpha gradient
-        writer.add_scalar("log_alpha_grad_0", torch.norm(model.log_alpha.grad[0].data), step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("log_alpha_grad_1", torch.norm(model.log_alpha.grad[1].data), step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("log_alpha_grad_2", torch.norm(model.log_alpha.grad[2].data), step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("log_alpha_grad_3", torch.norm(model.log_alpha.grad[3].data), step + len(train_queue.dataset) * epoch)
-        writer.add_scalar("log_alpha_grad_4", torch.norm(model.log_alpha.grad[4].data), step + len(train_queue.dataset) * epoch)
+        writer.add_scalar("log_alpha_grad_0", torch.norm(model.log_alpha.grad[0,:].data), step + len(train_queue.dataset) * epoch)
+        writer.add_scalar("log_alpha_grad_1", torch.norm(model.log_alpha.grad[1,:].data), step + len(train_queue.dataset) * epoch)
+        writer.add_scalar("log_alpha_grad_2", torch.norm(model.log_alpha.grad[2,:].data), step + len(train_queue.dataset) * epoch)
+        writer.add_scalar("log_alpha_grad_3", torch.norm(model.log_alpha.grad[3,:].data), step + len(train_queue.dataset) * epoch)
+        writer.add_scalar("log_alpha_grad_4", torch.norm(model.log_alpha.grad[4,:].data), step + len(train_queue.dataset) * epoch)
         if not args.reduce_model_size:
-            writer.add_scalar("log_alpha_grad_5", torch.norm(model.log_alpha.grad[5].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_6", torch.norm(model.log_alpha.grad[6].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_7", torch.norm(model.log_alpha.grad[7].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_8", torch.norm(model.log_alpha.grad[8].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_9", torch.norm(model.log_alpha.grad[9].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_10", torch.norm(model.log_alpha.grad[10].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_11", torch.norm(model.log_alpha.grad[11].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_12", torch.norm(model.log_alpha.grad[12].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_13", torch.norm(model.log_alpha.grad[13].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_14", torch.norm(model.log_alpha.grad[14].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_15", torch.norm(model.log_alpha.grad[15].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_16", torch.norm(model.log_alpha.grad[16].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_17", torch.norm(model.log_alpha.grad[17].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_18", torch.norm(model.log_alpha.grad[18].data), step + len(train_queue.dataset) * epoch)
-            writer.add_scalar("log_alpha_grad_19", torch.norm(model.log_alpha.grad[19].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_5", torch.norm(model.log_alpha.grad[5,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_6", torch.norm(model.log_alpha.grad[6,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_7", torch.norm(model.log_alpha.grad[7,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_8", torch.norm(model.log_alpha.grad[8,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_9", torch.norm(model.log_alpha.grad[9,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_10", torch.norm(model.log_alpha.grad[10,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_11", torch.norm(model.log_alpha.grad[11,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_12", torch.norm(model.log_alpha.grad[12,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_13", torch.norm(model.log_alpha.grad[13,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_14", torch.norm(model.log_alpha.grad[14,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_15", torch.norm(model.log_alpha.grad[15,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_16", torch.norm(model.log_alpha.grad[16,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_17", torch.norm(model.log_alpha.grad[17,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_18", torch.norm(model.log_alpha.grad[18,:].data), step + len(train_queue.dataset) * epoch)
+            writer.add_scalar("log_alpha_grad_19", torch.norm(model.log_alpha.grad[19,:].data), step + len(train_queue.dataset) * epoch)
 
 
 
